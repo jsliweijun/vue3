@@ -5,6 +5,7 @@ const execa = require('execa');
 const target = 'reactivity';
 
 async function build(target) {
+    // 监视开发
     await execa('rollup', ['-cw', '--environment', `TARGET:${target}`], {
         stdio: 'inherit'
     });

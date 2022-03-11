@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+    </head>
+    <body>
+        <script src="../reactivity/dist/reactivity.global.js"></script>
+        <script>
+            let { reactive, readonly, shallowReactive, shallowReadonly } = VueReactivity;
+            console.log(VueReactivity);
+
+            // 测试数据
+            let state = reactive({ name: 'zs', age: { n: 123 } });
+            console.log(state.age);
+            let state1 = readonly({ name: 'zs', age: { n: 123 } });
+            state1.name = 123;
+            console.log(state1.age);
+            let state2 = shallowReactive({ name: 'zs', age: { n: 123 } });
+            console.log(state2.age);
+            let state3 = shallowReadonly({ name: 'zs', age: { n: 123 } });
+            state3.name = 123;
+            console.log(state3.age);
+        </script>
+    </body>
+</html>
