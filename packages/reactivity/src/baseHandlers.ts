@@ -1,6 +1,8 @@
 // 创建 4 个 Proxy 到配置对象 new Proxy(target,handler)
 
 import { extend, isObject } from '@vue/shared';
+import { track } from './effect';
+import { TrackOpTypes } from './operators';
 import { reactive, readonly } from './reactive';
 
 //是不是仅读， 没有set 方法
@@ -18,6 +20,8 @@ function createGetter(isReadonly = false, shallow = false) {
 
         // 收集依赖
         if (!isReadonly) {
+            // 收集依赖，数据更新后更新视图,收集属性对应的 effect
+            track(target, TrackOpTypes.GET, key);
         }
 
         if (shallow) {
