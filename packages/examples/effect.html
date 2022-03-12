@@ -14,17 +14,19 @@
             let { effect, reactive } = VueReactivity;
 
             // 创建相应式数据
-            let state = reactive({ name: 'effect', age: 18, other: 'xxx' });
+            let state = reactive({ name: 'effect11', age: 18, other: 'xxx', arr: [1, 2, 3] });
 
             // 副作用函数，默认执行时会调用get 操作，页面渲染会进行执行，在get操作中将对应的 effect 存起来
             effect(() => {
-                app.innerHTML = `${state.name}  ----- ${state.age}`;
+                // app.innerHTML = `${state.name}  ----- ${state.age}`;
+                app.innerHTML = `${state.name}  ----- ${state.arr}`;
             });
 
             // 改值操作
             setTimeout(() => {
-                // state.age = 19
-                state.other = '1111'; // 页面没有这个变量，即使更新了，页面没有渲染，get 会记录 effect
+                //   state.name = 19;
+                // state.arr.push('22'); // 页面没有这个变量，即使更新了，页面没有渲染，get 会记录 effect
+                state.arr[100] = 2000;
             }, 1000);
         </script>
     </body>

@@ -1,6 +1,7 @@
 // 相应式 effect 三大特点：有标识，有类型标识，保留原来函数
 
-import { TrackOpTypes } from './operators';
+import { isArray, isIntegerKey, isSymbol } from '@vue/shared';
+import { TrackOpTypes, TrackOrTypes } from './operators';
 
 /**
  * 创建一个相应式的effect ，作用是 当数据变化时，这个effect能再执行
@@ -54,13 +55,15 @@ function createReactiveEffect(fn: Function, options: any) {
  */
 const targetMap = new WeakMap();
 export function track(target: object, type: TrackOpTypes, key: string) {
-    console.log(target, key, activeEffect);
+    // console.log(target, key, activeEffect);
     // 映射关系 , weakMap
     // {
     //     target: {
     //         key:activeEffect;
     //     }
     // }
+
+    //  console.log(key);
 
     if (activeEffect === undefined) {
         return;
@@ -78,10 +81,79 @@ export function track(target: object, type: TrackOpTypes, key: string) {
         dep.add(activeEffect);
     }
 
-    console.log(targetMap);
+    // console.log(targetMap);
 }
 
 // 问题场景
 // effect(()=>{
 //     state.xxx++ // 数据一变，回调执行，这样会进行会无限循环，依赖不需要收集多次
 // })
+
+/**
+ *
+ * @param target
+ * @param type   操作类型
+ * @param key    属性， 数组就给 索引 index
+ * @param newValue
+ * @param oldValue
+ *
+ * depsMap = {属性 key，effect}
+ */
+export function trigger(target: any, type: any, key?: any, newValue?: any, oldValue?: any) {
+    console.log(target, type, key, newValue, oldValue);
+    // 如果这个属性没有 收集 effect ，不需要做任何操作
+    const depsMap = targetMap.get(target);
+    if (!depsMap) {
+        return;
+    }
+
+    // 收集多个 effects ，去重，统一更新
+    const effects = new Set();
+
+    // 将多个effect 放在一起，统一执行
+    // dep 使用数组，里面放着多个 effect
+    const add = (effectToAdd: any) => {
+        if (effectToAdd) {
+            effectToAdd.forEach((effect: any) => effects.add(effect));
+        }
+    };
+
+    //  判断场景
+    // 修改的是不是数组长度
+    if (key === 'length' && isArray(target)) {
+        depsMap.forEach((dep: any, key: any, a: any) => {
+            //console.log(typeof key);
+            if (!isSymbol(key)) {
+                //  {arr:[1,2,3]}
+                // state.arr.length = 2;
+                // 索引大于 新长度 的元素需要被处理 ,3 被移除掉
+                if (key === 'length' || key > newValue) {
+                    add(dep);
+                }
+            }
+        });
+
+        // let entries = depsMap.entries();
+        // for (let i = 0; i < depsMap.size; i++) {
+        //     let entry = entries.next().value;
+        //     console.log(entry[0], entry[1]);
+        // }
+    } else {
+        // 可能是对象
+        if (key !== undefined) {
+            add(depsMap.get(key));
+        }
+
+        // 修改数组中的索引，新索引，大值 state.arr[1000] = 2000;
+        switch (
+            type // 如果添加了一个索引就触发长度的更新
+        ) {
+            case TrackOrTypes.ADD:
+                if (isArray(target) && isIntegerKey(key)) {
+                    add(depsMap.get('length'));
+                }
+        }
+    }
+
+    effects.forEach((effect: any) => effect());
+}

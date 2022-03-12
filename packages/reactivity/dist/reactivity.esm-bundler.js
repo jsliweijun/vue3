@@ -2,6 +2,15 @@ function isObject(val) {
     return typeof val === 'object' && val !== null;
 }
 const extend = Object.assign;
+const isArray = Array.isArray;
+// 判断是否为整型key ，例如数组索引
+const isIntegerKey = (value) => parseInt(value) + '' === value;
+// 判断对象是否有这个key
+let hasOwnProperty = Object.prototype.hasOwnProperty;
+const hasOwn = (target, key) => hasOwnProperty.call(target, key);
+//
+const hasChanged = (oldValue, value) => oldValue !== value;
+const isSymbol = (value) => typeof value === 'symbol';
 
 // 相应式 effect 三大特点：有标识，有类型标识，保留原来函数
 /**
@@ -51,13 +60,14 @@ function createReactiveEffect(fn, options) {
  */
 const targetMap = new WeakMap();
 function track(target, type, key) {
-    console.log(target, key, activeEffect);
+    // console.log(target, key, activeEffect);
     // 映射关系 , weakMap
     // {
     //     target: {
     //         key:activeEffect;
     //     }
     // }
+    //  console.log(key);
     if (activeEffect === undefined) {
         return;
     }
@@ -72,12 +82,74 @@ function track(target, type, key) {
     if (!dep.has(activeEffect)) {
         dep.add(activeEffect);
     }
-    console.log(targetMap);
+    // console.log(targetMap);
 }
 // 问题场景
 // effect(()=>{
 //     state.xxx++ // 数据一变，回调执行，这样会进行会无限循环，依赖不需要收集多次
 // })
+/**
+ *
+ * @param target
+ * @param type   操作类型
+ * @param key    属性， 数组就给 索引 index
+ * @param newValue
+ * @param oldValue
+ *
+ * depsMap = {属性 key，effect}
+ */
+function trigger(target, type, key, newValue, oldValue) {
+    console.log(target, type, key, newValue, oldValue);
+    // 如果这个属性没有 收集 effect ，不需要做任何操作
+    const depsMap = targetMap.get(target);
+    if (!depsMap) {
+        return;
+    }
+    // 收集多个 effects ，去重，统一更新
+    const effects = new Set();
+    // 将多个effect 放在一起，统一执行
+    // dep 使用数组，里面放着多个 effect
+    const add = (effectToAdd) => {
+        if (effectToAdd) {
+            effectToAdd.forEach((effect) => effects.add(effect));
+        }
+    };
+    //  判断场景
+    // 修改的是不是数组长度
+    if (key === 'length' && isArray(target)) {
+        depsMap.forEach((dep, key, a) => {
+            //console.log(typeof key);
+            if (!isSymbol(key)) {
+                //  {arr:[1,2,3]}
+                // state.arr.length = 2;
+                // 索引大于 新长度 的元素需要被处理 ,3 被移除掉
+                if (key === 'length' || key > newValue) {
+                    add(dep);
+                }
+            }
+        });
+        // let entries = depsMap.entries();
+        // for (let i = 0; i < depsMap.size; i++) {
+        //     let entry = entries.next().value;
+        //     console.log(entry[0], entry[1]);
+        // }
+    }
+    else {
+        // 可能是对象
+        if (key !== undefined) {
+            add(depsMap.get(key));
+        }
+        // 修改数组中的索引，新索引，大值 state.arr[1000] = 2000;
+        switch (type // 如果添加了一个索引就触发长度的更新
+        ) {
+            case 0 /* ADD */:
+                if (isArray(target) && isIntegerKey(key)) {
+                    add(depsMap.get('length'));
+                }
+        }
+    }
+    effects.forEach((effect) => effect());
+}
 
 // 创建 4 个 Proxy 到配置对象 new Proxy(target,handler)
 //是不是仅读， 没有set 方法
@@ -94,6 +166,7 @@ function createGetter(isReadonly = false, shallow = false) {
         // 收集依赖
         if (!isReadonly) {
             // 收集依赖，数据更新后更新视图,收集属性对应的 effect
+            // 数组时，将 Symbol(Symbol.toPrimitive)  toString jion
             track(target, 0 /* GET */, key);
         }
         if (shallow) {
@@ -110,8 +183,34 @@ const get = createGetter();
 const shollowGet = createGetter(false, true);
 const readonlyGet = createGetter(true);
 const showllowReadonlyGet = createGetter(true, true);
-const mutableHandlers = { get };
-const shallowReactiveHandlers = { get: shollowGet };
+/**
+ * 实现 notify ，更新页面，执行 effect
+ * set 要判断数据类型 ：object ，array
+ * 做的操作是新增还是修改  add ，set
+ *
+ * @param shallow
+ */
+function createSetter(shallow = false) {
+    return function set(target, key, value, receiver) {
+        const oldValue = target[key]; // 获取老值
+        // 是否有key . 判断是不是数组，是数组它的索引在不在里面， 判断是不是对象，有没有key
+        let hadKey = isArray(target) && isIntegerKey(key) ? Number(key) < target.length : hasOwn(target, key);
+        const result = Reflect.set(target, key, value, receiver); // target[key] = value
+        if (!hadKey) {
+            // 新增，
+            trigger(target, 0 /* ADD */, key, value);
+        }
+        else if (hasChanged(oldValue, value)) {
+            // 修改， 值需要不一样。
+            trigger(target, 1 /* SET */, key, value, oldValue);
+        }
+        return result;
+    };
+}
+const set = createSetter();
+const shallowSet = createSetter(true);
+const mutableHandlers = { get, set };
+const shallowReactiveHandlers = { get: shollowGet, set: shallowSet };
 let readonlyObj = {
     set: (target, key) => {
         console.warn(`set on key ${key}  failed`);
